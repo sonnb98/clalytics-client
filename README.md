@@ -14,17 +14,17 @@ bao nhiêu trên account xài chung). Cài **1 lần / máy**, sau đó chạy n
 
 ## Cài
 
-Xin admin 3 thứ: **URL** (địa chỉ clalytics, vd `https://clalytics.team.io`), **ENDPOINT** (`<URL>` cổng
-`:4318` hoặc URL ingest admin đưa), **TOKEN**. Installer phục vụ ngay tại `<URL>/install.sh`.
+Xin admin 2 thứ: **ENDPOINT** (URL ingest, vd `https://clalytics.team.io:4318`) và **TOKEN**.
 
 **Cách 1 — one-liner** (điền sẵn endpoint/token, chỉ hỏi email/name/team):
 ```bash
-CLALYTICS_ENDPOINT=<ENDPOINT> CLALYTICS_TOKEN=<TOKEN> bash <(curl -fsSL <URL>/install.sh)
+CLALYTICS_ENDPOINT=<ENDPOINT> CLALYTICS_TOKEN=<TOKEN> \
+  bash <(curl -fsSL https://raw.githubusercontent.com/sonnb98/clalytics-client/main/install.sh)
 ```
 
 **Cách 2 — tải file rồi chạy** (Windows dùng Git Bash):
 ```bash
-curl -fsSL <URL>/install.sh -o clalytics-install.sh
+curl -fsSL https://raw.githubusercontent.com/sonnb98/clalytics-client/main/install.sh -o clalytics-install.sh
 bash clalytics-install.sh
 ```
 
