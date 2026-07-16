@@ -96,7 +96,8 @@ s.env = s.env || {};
 Object.assign(s.env, {
   CLAUDE_CODE_ENABLE_TELEMETRY: '1',
   OTEL_METRICS_EXPORTER: 'otlp',
-  // Prometheus-based stack → cumulative (mặc định), KHÔNG dùng delta
+  // clalytics cộng dồn phía server → delta (mỗi push gửi phần tăng), khỏi track counter-reset
+  OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE: 'delta',
   OTEL_EXPORTER_OTLP_PROTOCOL: 'http/protobuf',
   OTEL_EXPORTER_OTLP_ENDPOINT: endpoint,
   OTEL_METRIC_EXPORT_INTERVAL: '60000',
