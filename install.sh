@@ -16,10 +16,11 @@
 
 set -euo pipefail
 
-# ==== Toggle track cho session riêng tư ====
-# settings.json THẮNG shell env → không tắt được bằng `CLAUDE_CODE_ENABLE_TELEMETRY=0 claude`.
-# Phải sửa file. Tắt trước session không muốn track, bật lại khi xong.
-#   bash install.sh off      # tắt track (session mở SAU đó không gửi token)
+# ==== Toggle track — chỉ còn mức TOÀN CỤC (settings.json) ====
+# Không còn per-session opt-out (`claude --notrack`) — launcher không qua login shell
+# (vd daemon spawn `claude` trực tiếp) sẽ không thấy cờ shell → không track được gì.
+# Chuyển hẳn cờ enable vào settings.json, mọi launcher đều đọc được.
+#   bash install.sh off      # tắt track (mọi session, mọi launcher)
 #   bash install.sh on       # bật lại
 #   bash install.sh status   # xem đang bật/tắt
 case "${1:-}" in
@@ -30,22 +31,17 @@ const fs=require('fs'),path=require('path'),os=require('os');
 const file=path.join(os.homedir(),'.claude','settings.json');
 let s={};try{s=JSON.parse(fs.readFileSync(file,'utf8')||'{}')}catch(e){}
 s.env=s.env||{};
-const installed=!!s.env.OTEL_EXPORTER_OTLP_ENDPOINT;
-const forcedOff=s.env.CLAUDE_CODE_ENABLE_TELEMETRY==='0';
+const flag=s.env.CLAUDE_CODE_ENABLE_TELEMETRY;
 if(process.env.MODE==='status'){
-  if(!installed) console.log('— chưa cài telemetry (chạy: bash install.sh)');
-  else console.log(forcedOff?'○ OFF — tắt toàn bộ (bật lại: bash install.sh on)'
-                            :'● ON — đang track (tắt 1 phiên: claude --notrack)');
+  if(flag==='1') console.log('● ON');
+  else if(flag==='0') console.log('○ OFF');
+  else console.log('○ OFF (chưa cài)');
   process.exit(0);
 }
-if(!installed){console.error('✗ Chưa cài telemetry. Chạy: bash install.sh');process.exit(1);}
-// off = ép =0 trong settings.json (THẮNG shell → tắt mọi session). on = xoá key (về mặc định shell =1).
-if(process.env.MODE==='on') delete s.env.CLAUDE_CODE_ENABLE_TELEMETRY;
-else s.env.CLAUDE_CODE_ENABLE_TELEMETRY='0';
+if(flag===undefined){console.error('✗ Chưa cài telemetry. Chạy: bash install.sh');process.exit(1);}
+s.env.CLAUDE_CODE_ENABLE_TELEMETRY = (process.env.MODE==='on') ? '1' : '0';
 fs.writeFileSync(file,JSON.stringify(s,null,2)+'\n');
-console.log(process.env.MODE==='on'
-  ? '✓ Bật track lại (mọi session).'
-  : '✓ Tắt track TOÀN BỘ. Chỉ muốn tắt 1 phiên? dùng: claude --notrack');
+console.log(process.env.MODE==='on' ? '✓ Bật track (mọi session).' : '✓ Tắt track (mọi session).');
 NODE
     exit 0 ;;
 esac
@@ -141,9 +137,8 @@ Object.assign(s.env, {
   // Phần repo THIẾU: danh tính NGƯỜI (account chung không tách được) → nhập tay
   OTEL_RESOURCE_ATTRIBUTES: `user.email=${email},user.name=${name},user.team=${team}`,
 });
-// Cờ bật/tắt KHÔNG để trong settings.json (settings.json thắng shell → không tắt được
-// per-session). Đưa ra shell profile bên dưới; chỉ dùng key này khi TẮT TOÀN BỘ (=0).
-delete s.env.CLAUDE_CODE_ENABLE_TELEMETRY;
+// Bật track ngay khi cài — mọi launcher (kể cả không qua login shell) đều đọc settings.json.
+s.env.CLAUDE_CODE_ENABLE_TELEMETRY = '1';
 fs.writeFileSync(file, JSON.stringify(s, null, 2) + '\n');
 const mask = token.length <= 6 ? '***' : token.slice(0,3)+'***'+token.slice(-2);
 console.log('✓ Đã ghi telemetry vào', file);
@@ -151,34 +146,23 @@ console.log(`  user.email=${email}  user.name=${name}  user.team=${team}`);
 console.log(`  endpoint=${endpoint}  token=${mask}`);
 NODE
 
-# ==== Bật telemetry qua shell profile + wrapper `claude --notrack` ====
-# Cờ enable ở shell (không phải settings.json) → override được từng lần chạy.
-# Hàm claude() chặn cờ --notrack: có → chạy claude với telemetry=0 (chỉ phiên đó).
-case "${SHELL:-}" in *zsh) PROFILE="$HOME/.zshrc";; *) PROFILE="$HOME/.bashrc";; esac
-touch "$PROFILE"
-# Gỡ block cũ (mọi format) rồi ghi lại — idempotent + nâng cấp được
-sed -i.clbak \
-  -e '/^# clalytics telemetry$/d' \
-  -e '/^alias claude-notrack=/d' \
-  -e '/^export CLAUDE_CODE_ENABLE_TELEMETRY=1$/d' \
-  -e '/^# >>> clalytics >>>$/,/^# <<< clalytics <<<$/d' \
-  "$PROFILE" && rm -f "$PROFILE.clbak"
-cat >> "$PROFILE" <<'PROF'
-
-# >>> clalytics >>>
-export CLAUDE_CODE_ENABLE_TELEMETRY=1
-# `claude --notrack` = phiên này KHÔNG gửi token (phiên khác track bình thường)
-claude() {
-  local a nt=0; local -a args=()
-  for a in "$@"; do if [ "$a" = "--notrack" ]; then nt=1; else args+=("$a"); fi; done
-  if [ "$nt" -eq 1 ]; then CLAUDE_CODE_ENABLE_TELEMETRY=0 command claude "${args[@]}"
-  else command claude "${args[@]}"; fi
-}
-# <<< clalytics <<<
-PROF
-echo "• Ghi cấu hình track + wrapper 'claude --notrack' vào $PROFILE"
+# ==== Dọn block shell profile cũ (migration) ====
+# Bản cũ ghi cờ enable + wrapper claude() vào ~/.zshrc / ~/.bashrc để hỗ trợ `claude --notrack`.
+# Thiết kế mới: cờ track nằm hẳn trong settings.json, không đụng shell profile nữa.
+# Chạy sed gỡ dọn ở đây (idempotent) để máy đã cài bản cũ được dọn sạch khi chạy lại script.
+for PROFILE in "$HOME/.zshrc" "$HOME/.bashrc"; do
+  [ -f "$PROFILE" ] || continue
+  if grep -q '^# >>> clalytics >>>$' "$PROFILE" 2>/dev/null; then
+    sed -i.clbak \
+      -e '/^# clalytics telemetry$/d' \
+      -e '/^alias claude-notrack=/d' \
+      -e '/^export CLAUDE_CODE_ENABLE_TELEMETRY=1$/d' \
+      -e '/^# >>> clalytics >>>$/,/^# <<< clalytics <<<$/d' \
+      "$PROFILE" && rm -f "$PROFILE.clbak"
+    echo "• Đã gỡ cấu hình track + wrapper 'claude' cũ khỏi $PROFILE (giờ dùng settings.json)"
+  fi
+done
 
 echo
-echo "Xong. Mở TERMINAL MỚI (để nạp profile) rồi dùng Claude Code — token đẩy về ${ENDPOINT}."
-echo "  • Tắt 1 phiên:   claude --notrack"
+echo "Xong. ĐÓNG HẲN và mở lại Claude Code (để nạp settings.json mới) — token đẩy về ${ENDPOINT}."
 echo "  • Tắt toàn bộ:   bash install.sh off   ·   bật lại: on   ·   xem: status"

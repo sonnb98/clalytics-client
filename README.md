@@ -42,8 +42,8 @@ Endpoint/token lưu lại cạnh script → lần sau khỏi nhập.
 
 ## Xong rồi làm gì
 
-**Mở lại Claude Code** (đóng hẳn rồi mở lại — CLI hoặc IDE). Token tự đẩy về mỗi ~60 giây khi bạn dùng.
-Sau vài phút, tên bạn xuất hiện trên dashboard.
+**Đóng hẳn và mở lại Claude Code** (CLI hoặc IDE) — cờ track chỉ có hiệu lực từ session mới.
+Token tự đẩy về mỗi ~60 giây khi bạn dùng. Sau vài phút, tên bạn xuất hiện trên dashboard.
 
 ## Kiểm tra đã cài
 
@@ -52,16 +52,12 @@ grep OTEL_EXPORTER_OTLP_ENDPOINT ~/.claude/settings.json   # có endpoint = ok
 bash install.sh status                                      # ● ON = đang track
 ```
 
-## Tắt track — theo phiên hoặc toàn bộ
+## Tắt track — toàn bộ (mọi phiên, mọi launcher)
 
-**Chỉ một phiên** — thêm cờ `--notrack`:
-```bash
-claude --notrack      # phiên này KHÔNG gửi token; các phiên khác vẫn track
-```
-(wrapper cài sẵn trong shell — mở **terminal mới** sau khi cài để có nó. Mọi cờ khác của
-`claude` vẫn hoạt động bình thường.)
+Cờ track nằm trong `~/.claude/settings.json` → tắt/bật là mức toàn cục, không còn tắt riêng
+1 phiên (`claude --notrack` đã bỏ — launcher không qua login shell, vd daemon spawn `claude`
+trực tiếp, không thấy được cờ đó nên vô nghĩa).
 
-**Toàn bộ** (mọi phiên, tới khi bật lại):
 ```bash
 bash install.sh off      # tắt hết
 bash install.sh on       # bật lại
@@ -75,8 +71,9 @@ Muốn **một dự án luôn không track**: tạo `.claude/settings.local.json
 ## Đổi thông tin / gỡ
 
 - **Đổi** email/name/team hay endpoint/token: chạy lại script (Enter để giữ, gõ để đổi từng ô).
-- **Gỡ**: xoá các key `OTEL_*` trong block `"env"` của `~/.claude/settings.json`, và xoá 3 dòng
-  `# clalytics telemetry` trong `~/.zshrc` (hoặc `~/.bashrc`). Backup cũ ở `~/.claude/settings.json.bak.*`.
+- **Gỡ**: xoá các key `OTEL_*` và `CLAUDE_CODE_ENABLE_TELEMETRY` trong block `"env"` của
+  `~/.claude/settings.json`. Backup cũ ở `~/.claude/settings.json.bak.*`. Không còn gì để xoá
+  trong `~/.zshrc` / `~/.bashrc` (bản mới không đụng shell profile).
 
 ## Riêng tư
 
