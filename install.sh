@@ -16,6 +16,31 @@
 
 set -euo pipefail
 
+# ==== Toggle track cho session riêng tư ====
+# settings.json THẮNG shell env → không tắt được bằng `CLAUDE_CODE_ENABLE_TELEMETRY=0 claude`.
+# Phải sửa file. Tắt trước session không muốn track, bật lại khi xong.
+#   bash install.sh off      # tắt track (session mở SAU đó không gửi token)
+#   bash install.sh on       # bật lại
+#   bash install.sh status   # xem đang bật/tắt
+case "${1:-}" in
+  on|off|status)
+    command -v node >/dev/null 2>&1 || { echo "✗ Cần Node.js." >&2; exit 1; }
+    MODE="$1" node - <<'NODE'
+const fs=require('fs'),path=require('path'),os=require('os');
+const file=path.join(os.homedir(),'.claude','settings.json');
+let s={};try{s=JSON.parse(fs.readFileSync(file,'utf8')||'{}')}catch(e){}
+const on=(s.env||{}).CLAUDE_CODE_ENABLE_TELEMETRY==='1';
+if(process.env.MODE==='status'){console.log(on?'● ON — đang track':'○ OFF — không track');process.exit(0);}
+if(!s.env){console.error('✗ Chưa cài telemetry. Chạy: bash install.sh');process.exit(1);}
+s.env.CLAUDE_CODE_ENABLE_TELEMETRY=process.env.MODE==='on'?'1':'0';
+fs.writeFileSync(file,JSON.stringify(s,null,2)+'\n');
+console.log(process.env.MODE==='on'
+  ? '✓ Bật track. (Mở lại Claude Code nếu đang chạy.)'
+  : '✓ Tắt track — session Claude Code mở SAU đây không gửi token. Bật lại: bash install.sh on');
+NODE
+    exit 0 ;;
+esac
+
 # ==== Nạp .env cạnh script (endpoint + token dùng chung cả team) ====
 # Chưa có .env → tự tạo template. Có → nạp. Cuối script lưu lại cho lần sau.
 SELF="${BASH_SOURCE[0]:-$0}"

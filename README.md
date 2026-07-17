@@ -52,6 +52,25 @@ grep -A15 '"env"' ~/.claude/settings.json
 ```
 Thấy `CLAUDE_CODE_ENABLE_TELEMETRY`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_RESOURCE_ATTRIBUTES` (email/name/team của bạn) là ok.
 
+## Tắt track cho session riêng tư
+
+Không muốn một phiên bị tính token? Tắt trước, bật lại khi xong. (Claude Code đọc `settings.json`
+nên **không** tắt được bằng biến shell — phải dùng lệnh dưới.)
+
+```bash
+bash install.sh off      # tắt — session Claude Code mở SAU đó không gửi token
+bash install.sh on       # bật lại
+bash install.sh status   # xem đang ● ON hay ○ OFF
+```
+
+Không giữ file? Chạy thẳng qua curl (truyền `off`/`on`/`status` làm tham số):
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/sonnb98/clalytics-client/main/install.sh) off
+```
+
+Nếu Claude Code đang mở, **mở lại** để áp dụng. Muốn **một dự án luôn không track**: tạo
+`.claude/settings.local.json` trong repo đó với `{"env":{"CLAUDE_CODE_ENABLE_TELEMETRY":"0"}}`.
+
 ## Đổi thông tin / gỡ
 
 - **Đổi** email/name/team hay endpoint/token: chạy lại script.
