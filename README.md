@@ -14,7 +14,7 @@ bao nhiêu trên account xài chung). Cài **1 lần / máy**, sau đó chạy n
 
 ## Cài
 
-Xin admin 2 thứ: **ENDPOINT** (URL ingest, vd `https://clalytics.team.io:4318`) và **TOKEN**.
+Xin admin 2 thứ: **ENDPOINT** (URL clalytics, vd `https://clalytics.team.io`) và **TOKEN**.
 
 **Cách 1 — one-liner** (điền sẵn endpoint/token, chỉ hỏi email/name/team):
 ```bash
@@ -48,33 +48,34 @@ Sau vài phút, tên bạn xuất hiện trên dashboard.
 ## Kiểm tra đã cài
 
 ```bash
-grep -A15 '"env"' ~/.claude/settings.json
+grep OTEL_EXPORTER_OTLP_ENDPOINT ~/.claude/settings.json   # có endpoint = ok
+bash install.sh status                                      # ● ON = đang track
 ```
-Thấy `CLAUDE_CODE_ENABLE_TELEMETRY`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_RESOURCE_ATTRIBUTES` (email/name/team của bạn) là ok.
 
-## Tắt track cho session riêng tư
+## Tắt track — theo phiên hoặc toàn bộ
 
-Không muốn một phiên bị tính token? Tắt trước, bật lại khi xong. (Claude Code đọc `settings.json`
-nên **không** tắt được bằng biến shell — phải dùng lệnh dưới.)
-
+**Chỉ một phiên** (dùng thay lệnh `claude`):
 ```bash
-bash install.sh off      # tắt — session Claude Code mở SAU đó không gửi token
+claude-notrack        # phiên này KHÔNG gửi token; các phiên khác vẫn track
+```
+(alias cài sẵn trong shell — mở **terminal mới** sau khi cài để có nó.)
+
+**Toàn bộ** (mọi phiên, tới khi bật lại):
+```bash
+bash install.sh off      # tắt hết
 bash install.sh on       # bật lại
-bash install.sh status   # xem đang ● ON hay ○ OFF
+bash install.sh status   # ● ON / ○ OFF
 ```
+Không giữ file? `bash <(curl -fsSL https://raw.githubusercontent.com/sonnb98/clalytics-client/main/install.sh) off`
 
-Không giữ file? Chạy thẳng qua curl (truyền `off`/`on`/`status` làm tham số):
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/sonnb98/clalytics-client/main/install.sh) off
-```
-
-Nếu Claude Code đang mở, **mở lại** để áp dụng. Muốn **một dự án luôn không track**: tạo
-`.claude/settings.local.json` trong repo đó với `{"env":{"CLAUDE_CODE_ENABLE_TELEMETRY":"0"}}`.
+Muốn **một dự án luôn không track**: tạo `.claude/settings.local.json` trong repo đó với
+`{"env":{"CLAUDE_CODE_ENABLE_TELEMETRY":"0"}}`.
 
 ## Đổi thông tin / gỡ
 
-- **Đổi** email/name/team hay endpoint/token: chạy lại script.
-- **Gỡ**: mở `~/.claude/settings.json`, xoá các key `OTEL_*` và `CLAUDE_CODE_ENABLE_TELEMETRY` trong block `"env"`. Script đã backup file cũ tại `~/.claude/settings.json.bak.*`.
+- **Đổi** email/name/team hay endpoint/token: chạy lại script (Enter để giữ, gõ để đổi từng ô).
+- **Gỡ**: xoá các key `OTEL_*` trong block `"env"` của `~/.claude/settings.json`, và xoá 3 dòng
+  `# clalytics telemetry` trong `~/.zshrc` (hoặc `~/.bashrc`). Backup cũ ở `~/.claude/settings.json.bak.*`.
 
 ## Riêng tư
 

@@ -29,14 +29,23 @@ case "${1:-}" in
 const fs=require('fs'),path=require('path'),os=require('os');
 const file=path.join(os.homedir(),'.claude','settings.json');
 let s={};try{s=JSON.parse(fs.readFileSync(file,'utf8')||'{}')}catch(e){}
-const on=(s.env||{}).CLAUDE_CODE_ENABLE_TELEMETRY==='1';
-if(process.env.MODE==='status'){console.log(on?'● ON — đang track':'○ OFF — không track');process.exit(0);}
-if(!s.env){console.error('✗ Chưa cài telemetry. Chạy: bash install.sh');process.exit(1);}
-s.env.CLAUDE_CODE_ENABLE_TELEMETRY=process.env.MODE==='on'?'1':'0';
+s.env=s.env||{};
+const installed=!!s.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+const forcedOff=s.env.CLAUDE_CODE_ENABLE_TELEMETRY==='0';
+if(process.env.MODE==='status'){
+  if(!installed) console.log('— chưa cài telemetry (chạy: bash install.sh)');
+  else console.log(forcedOff?'○ OFF — tắt toàn bộ (bật lại: bash install.sh on)'
+                            :'● ON — đang track (tắt 1 phiên: claude-notrack)');
+  process.exit(0);
+}
+if(!installed){console.error('✗ Chưa cài telemetry. Chạy: bash install.sh');process.exit(1);}
+// off = ép =0 trong settings.json (THẮNG shell → tắt mọi session). on = xoá key (về mặc định shell =1).
+if(process.env.MODE==='on') delete s.env.CLAUDE_CODE_ENABLE_TELEMETRY;
+else s.env.CLAUDE_CODE_ENABLE_TELEMETRY='0';
 fs.writeFileSync(file,JSON.stringify(s,null,2)+'\n');
 console.log(process.env.MODE==='on'
-  ? '✓ Bật track. (Mở lại Claude Code nếu đang chạy.)'
-  : '✓ Tắt track — session Claude Code mở SAU đây không gửi token. Bật lại: bash install.sh on');
+  ? '✓ Bật track lại (mọi session).'
+  : '✓ Tắt track TOÀN BỘ. Chỉ muốn tắt 1 phiên? dùng: claude-notrack');
 NODE
     exit 0 ;;
 esac
@@ -54,7 +63,7 @@ if [ -f "$SELF" ]; then
     echo "• Tạo $ENV_FILE (lần sau khỏi nhập lại endpoint/token)."
   fi
 fi
-ENDPOINT="${CLALYTICS_ENDPOINT:-}"   # vd http://<host>:4318 (OTLP HTTP của collector)
+ENDPOINT="${CLALYTICS_ENDPOINT:-}"   # vd https://clalytics.team.io (URL clalytics, cùng port dashboard)
 TOKEN="${CLALYTICS_TOKEN:-}"         # ingest token (khớp .env server)
 
 # ==== Tự suy person từ git (data tự sinh được → làm default) ====
@@ -77,8 +86,9 @@ ask() { # ask VAR_NAME "prompt" "default"
       printf '%s: ' "$prompt"; read -r val < /dev/tty || true
       [ -z "$val" ] && echo "  (bắt buộc)"
     done
-  elif [ -z "$cur" ] && [ "$HAS_TTY" = "1" ]; then
-    printf '%s [%s]: ' "$prompt" "$def"; local a=""; read -r a < /dev/tty || true; val="${a:-$def}"
+  elif [ "$HAS_TTY" = "1" ]; then
+    # đã có giá trị + có terminal → vẫn hỏi (Enter giữ nguyên, gõ để đổi)
+    printf '%s [%s]: ' "$prompt" "$val"; local a=""; read -r a < /dev/tty || true; val="${a:-$val}"
   fi
   printf -v "$var" '%s' "$val"
 }
@@ -88,7 +98,7 @@ echo "— Cài telemetry Claude Code (clalytics) —"
 ask EMAIL    "Email của bạn (user.email)"            "${CLALYTICS_EMAIL:-$GIT_EMAIL}"
 ask NAME     "Tên của bạn (user.name)"               "${CLALYTICS_NAME:-$GIT_NAME}"
 ask TEAM     "Team của bạn (user.team)"              "${CLALYTICS_TEAM:-}"
-ask ENDPOINT "Collector endpoint (vd http://host:4318)" "$ENDPOINT"
+ask ENDPOINT "clalytics URL (vd https://clalytics.team.io)" "$ENDPOINT"
 ask TOKEN    "Ingest token"                          "$TOKEN"
 ENDPOINT="${ENDPOINT%/}"
 
@@ -119,7 +129,6 @@ if (fs.existsSync(file)) {
 }
 s.env = s.env || {};
 Object.assign(s.env, {
-  CLAUDE_CODE_ENABLE_TELEMETRY: '1',
   OTEL_METRICS_EXPORTER: 'otlp',
   // clalytics cộng dồn phía server → delta (mỗi push gửi phần tăng), khỏi track counter-reset
   OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE: 'delta',
@@ -132,6 +141,9 @@ Object.assign(s.env, {
   // Phần repo THIẾU: danh tính NGƯỜI (account chung không tách được) → nhập tay
   OTEL_RESOURCE_ATTRIBUTES: `user.email=${email},user.name=${name},user.team=${team}`,
 });
+// Cờ bật/tắt KHÔNG để trong settings.json (settings.json thắng shell → không tắt được
+// per-session). Đưa ra shell profile bên dưới; chỉ dùng key này khi TẮT TOÀN BỘ (=0).
+delete s.env.CLAUDE_CODE_ENABLE_TELEMETRY;
 fs.writeFileSync(file, JSON.stringify(s, null, 2) + '\n');
 const mask = token.length <= 6 ? '***' : token.slice(0,3)+'***'+token.slice(-2);
 console.log('✓ Đã ghi telemetry vào', file);
@@ -139,4 +151,23 @@ console.log(`  user.email=${email}  user.name=${name}  user.team=${team}`);
 console.log(`  endpoint=${endpoint}  token=${mask}`);
 NODE
 
-echo "Xong. Mở lại Claude Code (CLI/IDE) — token tự đẩy về ${ENDPOINT}."
+# ==== Bật telemetry qua shell profile (cho phép tắt per-session) ====
+# Cờ ở shell (không phải settings.json) → có thể override từng lần: claude-notrack.
+case "${SHELL:-}" in *zsh) PROFILE="$HOME/.zshrc";; *) PROFILE="$HOME/.bashrc";; esac
+MARK="# clalytics telemetry"
+if ! grep -q "$MARK" "$PROFILE" 2>/dev/null; then
+  {
+    echo ""
+    echo "$MARK"
+    echo "export CLAUDE_CODE_ENABLE_TELEMETRY=1"
+    echo "alias claude-notrack='CLAUDE_CODE_ENABLE_TELEMETRY=0 claude'   # chạy 1 phiên KHÔNG track"
+  } >> "$PROFILE"
+  echo "• Thêm bật-track + alias 'claude-notrack' vào $PROFILE"
+else
+  echo "• $PROFILE đã có cấu hình clalytics — giữ nguyên."
+fi
+
+echo
+echo "Xong. Mở TERMINAL MỚI (để nạp profile) rồi dùng Claude Code — token đẩy về ${ENDPOINT}."
+echo "  • Tắt 1 phiên:   claude-notrack        (thay cho lệnh claude)"
+echo "  • Tắt toàn bộ:   bash install.sh off   ·   bật lại: on   ·   xem: status"
