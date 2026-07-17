@@ -35,7 +35,7 @@ const forcedOff=s.env.CLAUDE_CODE_ENABLE_TELEMETRY==='0';
 if(process.env.MODE==='status'){
   if(!installed) console.log('— chưa cài telemetry (chạy: bash install.sh)');
   else console.log(forcedOff?'○ OFF — tắt toàn bộ (bật lại: bash install.sh on)'
-                            :'● ON — đang track (tắt 1 phiên: claude-notrack)');
+                            :'● ON — đang track (tắt 1 phiên: claude --notrack)');
   process.exit(0);
 }
 if(!installed){console.error('✗ Chưa cài telemetry. Chạy: bash install.sh');process.exit(1);}
@@ -45,7 +45,7 @@ else s.env.CLAUDE_CODE_ENABLE_TELEMETRY='0';
 fs.writeFileSync(file,JSON.stringify(s,null,2)+'\n');
 console.log(process.env.MODE==='on'
   ? '✓ Bật track lại (mọi session).'
-  : '✓ Tắt track TOÀN BỘ. Chỉ muốn tắt 1 phiên? dùng: claude-notrack');
+  : '✓ Tắt track TOÀN BỘ. Chỉ muốn tắt 1 phiên? dùng: claude --notrack');
 NODE
     exit 0 ;;
 esac
@@ -151,23 +151,34 @@ console.log(`  user.email=${email}  user.name=${name}  user.team=${team}`);
 console.log(`  endpoint=${endpoint}  token=${mask}`);
 NODE
 
-# ==== Bật telemetry qua shell profile (cho phép tắt per-session) ====
-# Cờ ở shell (không phải settings.json) → có thể override từng lần: claude-notrack.
+# ==== Bật telemetry qua shell profile + wrapper `claude --notrack` ====
+# Cờ enable ở shell (không phải settings.json) → override được từng lần chạy.
+# Hàm claude() chặn cờ --notrack: có → chạy claude với telemetry=0 (chỉ phiên đó).
 case "${SHELL:-}" in *zsh) PROFILE="$HOME/.zshrc";; *) PROFILE="$HOME/.bashrc";; esac
-MARK="# clalytics telemetry"
-if ! grep -q "$MARK" "$PROFILE" 2>/dev/null; then
-  {
-    echo ""
-    echo "$MARK"
-    echo "export CLAUDE_CODE_ENABLE_TELEMETRY=1"
-    echo "alias claude-notrack='CLAUDE_CODE_ENABLE_TELEMETRY=0 claude'   # chạy 1 phiên KHÔNG track"
-  } >> "$PROFILE"
-  echo "• Thêm bật-track + alias 'claude-notrack' vào $PROFILE"
-else
-  echo "• $PROFILE đã có cấu hình clalytics — giữ nguyên."
-fi
+touch "$PROFILE"
+# Gỡ block cũ (mọi format) rồi ghi lại — idempotent + nâng cấp được
+sed -i.clbak \
+  -e '/^# clalytics telemetry$/d' \
+  -e '/^alias claude-notrack=/d' \
+  -e '/^export CLAUDE_CODE_ENABLE_TELEMETRY=1$/d' \
+  -e '/^# >>> clalytics >>>$/,/^# <<< clalytics <<<$/d' \
+  "$PROFILE" && rm -f "$PROFILE.clbak"
+cat >> "$PROFILE" <<'PROF'
+
+# >>> clalytics >>>
+export CLAUDE_CODE_ENABLE_TELEMETRY=1
+# `claude --notrack` = phiên này KHÔNG gửi token (phiên khác track bình thường)
+claude() {
+  local a nt=0; local -a args=()
+  for a in "$@"; do if [ "$a" = "--notrack" ]; then nt=1; else args+=("$a"); fi; done
+  if [ "$nt" -eq 1 ]; then CLAUDE_CODE_ENABLE_TELEMETRY=0 command claude "${args[@]}"
+  else command claude "${args[@]}"; fi
+}
+# <<< clalytics <<<
+PROF
+echo "• Ghi cấu hình track + wrapper 'claude --notrack' vào $PROFILE"
 
 echo
 echo "Xong. Mở TERMINAL MỚI (để nạp profile) rồi dùng Claude Code — token đẩy về ${ENDPOINT}."
-echo "  • Tắt 1 phiên:   claude-notrack        (thay cho lệnh claude)"
+echo "  • Tắt 1 phiên:   claude --notrack"
 echo "  • Tắt toàn bộ:   bash install.sh off   ·   bật lại: on   ·   xem: status"

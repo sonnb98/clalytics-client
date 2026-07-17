@@ -54,11 +54,12 @@ bash install.sh status                                      # ● ON = đang tra
 
 ## Tắt track — theo phiên hoặc toàn bộ
 
-**Chỉ một phiên** (dùng thay lệnh `claude`):
+**Chỉ một phiên** — thêm cờ `--notrack`:
 ```bash
-claude-notrack        # phiên này KHÔNG gửi token; các phiên khác vẫn track
+claude --notrack      # phiên này KHÔNG gửi token; các phiên khác vẫn track
 ```
-(alias cài sẵn trong shell — mở **terminal mới** sau khi cài để có nó.)
+(wrapper cài sẵn trong shell — mở **terminal mới** sau khi cài để có nó. Mọi cờ khác của
+`claude` vẫn hoạt động bình thường.)
 
 **Toàn bộ** (mọi phiên, tới khi bật lại):
 ```bash
