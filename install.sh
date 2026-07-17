@@ -91,9 +91,9 @@ ask() { # ask VAR_NAME "prompt" "default"
 
 echo "— Cài telemetry Claude Code (clalytics) —"
 
-ask EMAIL    "Email của bạn (user.email)"            "${CLALYTICS_EMAIL:-$GIT_EMAIL}"
-ask NAME     "Tên của bạn (user.name)"               "${CLALYTICS_NAME:-$GIT_NAME}"
-ask TEAM     "Team của bạn (user.team)"              "${CLALYTICS_TEAM:-}"
+ask EMAIL    "Email của bạn (person_email)"          "${CLALYTICS_EMAIL:-$GIT_EMAIL}"
+ask NAME     "Tên của bạn (person_name)"             "${CLALYTICS_NAME:-$GIT_NAME}"
+ask TEAM     "Team của bạn (person_team)"            "${CLALYTICS_TEAM:-}"
 ask ENDPOINT "clalytics URL (vd https://clalytics.team.io)" "$ENDPOINT"
 ask TOKEN    "Ingest token"                          "$TOKEN"
 ENDPOINT="${ENDPOINT%/}"
@@ -134,15 +134,20 @@ Object.assign(s.env, {
   // Account tự track (Claude Code auto-gắn) — key ổn định để chia theo account
   OTEL_METRICS_INCLUDE_ACCOUNT_UUID: 'true',
   OTEL_EXPORTER_OTLP_HEADERS: `Authorization=Bearer ${token}`,
-  // Phần repo THIẾU: danh tính NGƯỜI (account chung không tách được) → nhập tay
-  OTEL_RESOURCE_ATTRIBUTES: `user.email=${email},user.name=${name},user.team=${team}`,
+  // Phần repo THIẾU: danh tính NGƯỜI (account chung không tách được) → nhập tay.
+  // Dùng key CUSTOM (person_*), KHÔNG dùng user.email/user.name/user.team: Claude Code
+  // tự set user.email/user.id/... từ ACCOUNT (built-in) và theo docs, khi trùng key thì
+  // "keeps the built-in value" — nghĩa là user.email client set ở đây sẽ BỊ VỨT, thay bằng
+  // email của account chung → 20 người share account ra cùng 1 email, mất hết per-person.
+  // Key custom không trùng built-in thì đi lọt qua resource block tới backend nguyên vẹn.
+  OTEL_RESOURCE_ATTRIBUTES: `person_email=${email},person_name=${name},person_team=${team}`,
 });
 // Bật track ngay khi cài — mọi launcher (kể cả không qua login shell) đều đọc settings.json.
 s.env.CLAUDE_CODE_ENABLE_TELEMETRY = '1';
 fs.writeFileSync(file, JSON.stringify(s, null, 2) + '\n');
 const mask = token.length <= 6 ? '***' : token.slice(0,3)+'***'+token.slice(-2);
 console.log('✓ Đã ghi telemetry vào', file);
-console.log(`  user.email=${email}  user.name=${name}  user.team=${team}`);
+console.log(`  person_email=${email}  person_name=${name}  person_team=${team}`);
 console.log(`  endpoint=${endpoint}  token=${mask}`);
 NODE
 

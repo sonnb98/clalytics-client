@@ -71,9 +71,14 @@ Muốn **một dự án luôn không track**: tạo `.claude/settings.local.json
 ## Đổi thông tin / gỡ
 
 - **Đổi** email/name/team hay endpoint/token: chạy lại script (Enter để giữ, gõ để đổi từng ô).
-- **Gỡ**: xoá các key `OTEL_*` và `CLAUDE_CODE_ENABLE_TELEMETRY` trong block `"env"` của
-  `~/.claude/settings.json`. Backup cũ ở `~/.claude/settings.json.bak.*`. Không còn gì để xoá
-  trong `~/.zshrc` / `~/.bashrc` (bản mới không đụng shell profile).
+- **Gỡ**: xoá các key `OTEL_*` (gồm `OTEL_RESOURCE_ATTRIBUTES` chứa `person_email`/`person_name`/
+  `person_team`) và `CLAUDE_CODE_ENABLE_TELEMETRY` trong block `"env"` của `~/.claude/settings.json`.
+  Backup cũ ở `~/.claude/settings.json.bak.*`. Không còn gì để xoá trong `~/.zshrc` / `~/.bashrc`
+  (bản mới không đụng shell profile).
+
+> Danh tính gửi đi qua key **custom** `person_email`/`person_name`/`person_team` — không phải
+> `user.email`. `user.email` là attribute Claude Code tự gắn từ account dùng chung, không phân
+> biệt được người khi 20 người xài chung 1 account.
 
 ## Riêng tư
 
