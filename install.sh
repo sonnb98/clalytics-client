@@ -113,6 +113,10 @@ CLALYTICS_ENDPOINT="$ENDPOINT" CLALYTICS_TOKEN="$TOKEN" node - <<'NODE'
 const fs = require('fs'), path = require('path'), os = require('os');
 const email = process.env.CLALYTICS_EMAIL, name = process.env.CLALYTICS_NAME, team = process.env.CLALYTICS_TEAM;
 const endpoint = process.env.CLALYTICS_ENDPOINT, token = process.env.CLALYTICS_TOKEN;
+// Chuẩn hoá giá trị resource attribute về tập ký tự an toàn.
+// ĐÃ THỬ percent-encode (person_name=Ha%20Do) — KHÔNG ăn, Claude Code không decode,
+// chuỗi vẫn hỏng. Cách chạy được duy nhất là không có ký tự lạ ngay từ đầu.
+const enc = (v) => (v || '').trim().replace(/[^A-Za-z0-9._@+-]+/g, '-').replace(/^-+|-+$/g, '');
 const dir = path.join(os.homedir(), '.claude'), file = path.join(dir, 'settings.json');
 fs.mkdirSync(dir, { recursive: true });
 let s = {};
@@ -140,14 +144,22 @@ Object.assign(s.env, {
   // "keeps the built-in value" — nghĩa là user.email client set ở đây sẽ BỊ VỨT, thay bằng
   // email của account chung → 20 người share account ra cùng 1 email, mất hết per-person.
   // Key custom không trùng built-in thì đi lọt qua resource block tới backend nguyên vẹn.
-  OTEL_RESOURCE_ATTRIBUTES: `person_email=${email},person_name=${name},person_team=${team}`,
+  // Giá trị PHẢI sạch ký tự lạ. Đo thực tế 2026-07-21: `person_name=Ha Do` (đúng một
+  // dấu cách) làm rớt TOÀN BỘ person_* ⇒ Claude Code rơi về user.email = email account
+  // dùng chung ⇒ người đó biến mất khỏi dashboard, gộp vào cục vô danh.
+  // Hỏng CÂM: không lỗi, không cảnh báo, dashboard vẫn có số — chỉ sai người.
+  OTEL_RESOURCE_ATTRIBUTES: `person_email=${enc(email)},person_name=${enc(name)},person_team=${enc(team)}`,
 });
 // Bật track ngay khi cài — mọi launcher (kể cả không qua login shell) đều đọc settings.json.
 s.env.CLAUDE_CODE_ENABLE_TELEMETRY = '1';
 fs.writeFileSync(file, JSON.stringify(s, null, 2) + '\n');
 const mask = token.length <= 6 ? '***' : token.slice(0,3)+'***'+token.slice(-2);
 console.log('✓ Đã ghi telemetry vào', file);
-console.log(`  person_email=${email}  person_name=${name}  person_team=${team}`);
+console.log(`  person_email=${enc(email)}  person_name=${enc(name)}  person_team=${enc(team)}`);
+if (enc(name) !== name || enc(email) !== email || enc(team) !== (team || '')) {
+  console.log('  ⚠ Đã bỏ ký tự lạ (dấu cách, ngoặc…) — bắt buộc, nếu giữ thì Claude Code');
+  console.log('    vứt hết danh tính và bạn sẽ không hiện trên dashboard.');
+}
 console.log(`  endpoint=${endpoint}  token=${mask}`);
 NODE
 
